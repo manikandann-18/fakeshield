@@ -127,47 +127,60 @@ export const verifyPostContent = async (req, res) => {
       }
     }
     
-    let fakeScore = 0;
-    let riskLevel = 'Low';
+    let fakeScoreVal = 0;
     let status = 'verified';
 
     if (prediction === 'Fake') {
-      fakeScore = confidence / 100;
-      if (fakeScore >= 0.7) {
-        riskLevel = 'High';
+      fakeScoreVal = confidence / 100;
+      if (fakeScoreVal >= 0.7) {
         status = 'flagged';
       } else {
-        riskLevel = 'Medium';
         status = 'pending';
       }
     } else if (prediction === 'General') {
-      fakeScore = 0.5;
-      riskLevel = 'Neutral';
+      fakeScoreVal = 0.5;
       status = 'general';
     } else {
-      fakeScore = 1 - (confidence / 100);
-      riskLevel = 'Low';
+      fakeScoreVal = 1 - (confidence / 100);
       status = 'verified';
     }
     
-    // If a dangerous URL was found, escalate the risk level
-    if (highestThreatStatus === 'Malicious') {
-      riskLevel = 'High';
+    const finalFakeScore = Math.round(fakeScoreVal * 100);
+    const finalThreatScore = Math.round(phishingScore);
+    
+    // Unified risk score formula
+    let finalRiskScore;
+    if (urls.length > 0) {
+      finalRiskScore = Math.round((finalFakeScore + finalThreatScore) / 2);
+    } else {
+      finalRiskScore = finalFakeScore;
+    }
+    
+    // Map risk levels
+    let finalRiskLevel = 'Low';
+    if (finalRiskScore >= 85) {
+      finalRiskLevel = 'Critical';
       status = 'flagged';
-    } else if (highestThreatStatus === 'Suspicious' && riskLevel === 'Low') {
-      riskLevel = 'Medium';
+    } else if (finalRiskScore >= 70) {
+      finalRiskLevel = 'High';
+      status = 'flagged';
+    } else if (finalRiskScore >= 35) {
+      finalRiskLevel = 'Medium';
       status = 'pending';
+    } else {
+      finalRiskLevel = 'Low';
+      status = 'verified';
     }
 
     // Format for frontend
     const verificationReport = {
+      fakeScore: finalFakeScore,
+      threatScore: finalThreatScore,
+      riskScore: finalRiskScore,
+      riskLevel: finalRiskLevel,
       status,
-      riskScore: Math.max(Math.round(fakeScore * 100), Math.round(phishingScore)),
-      fakeNewsScore: Math.round(fakeScore * 100),
-      phishingScore: Math.round(phishingScore),
-      threatStatus: highestThreatStatus,
       urlsScanned: threatReports.map(r => ({ url: r.url, status: r.status, confidence: r.confidence })),
-      details: `AI Prediction: ${prediction} (${confidence.toFixed(1)}%). Phishing check: ${highestThreatStatus}${phishingScore > 0 ? ` (${phishingScore.toFixed(1)}%)` : ''}.`
+      details: `Fake News Score: ${finalFakeScore}%, Threat Score: ${finalThreatScore}%, Risk Score: ${finalRiskScore}% (${finalRiskLevel}).`
     };
 
     // 5. Store verification result in MongoDB
@@ -175,9 +188,10 @@ export const verifyPostContent = async (req, res) => {
     const verification = new VerificationResult({
       post: id,
       verifiedBy: req.user.id,
-      fakeScore,
-      confidence,
-      riskLevel
+      fakeScore: finalFakeScore,
+      threatScore: finalThreatScore,
+      riskScore: finalRiskScore,
+      riskLevel: finalRiskLevel
     });
     await verification.save();
 

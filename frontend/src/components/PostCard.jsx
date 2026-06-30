@@ -49,7 +49,7 @@ export default function PostCard({ post, onUpdate, onDelete }) {
   const renderVerificationBadge = () => {
     if (!post.verificationReport || post.verificationReport.status === 'unverified') return null;
 
-    const { status, riskScore, fakeNewsScore, phishingScore, details } = post.verificationReport;
+    const { status, riskScore, fakeScore, threatScore, riskLevel, details } = post.verificationReport;
     
     let styles = 'bg-slate-50 text-slate-800 border-slate-200';
     if (status === 'verified') styles = 'bg-emerald-50 text-emerald-800 border-emerald-200';
@@ -64,7 +64,7 @@ export default function PostCard({ post, onUpdate, onDelete }) {
           <span>{status === 'general' ? 'GENERAL INFORMATION' : `Shield Analysis: ${status.toUpperCase()}`}</span>
           {status !== 'general' && (
             <span className="text-sm font-bold px-3 py-1 bg-white rounded-full shadow-sm text-slate-800">
-              Risk Score: {riskScore}/100
+              Risk: {riskScore}/100 ({riskLevel})
             </span>
           )}
         </div>
@@ -73,11 +73,11 @@ export default function PostCard({ post, onUpdate, onDelete }) {
             <>
               <div className="flex justify-between max-w-xs">
                 <span>Fake News Probability:</span>
-                <span>{fakeNewsScore}%</span>
+                <span>{fakeScore || 0}%</span>
               </div>
               <div className="flex justify-between max-w-xs">
                 <span>Phishing Threat:</span>
-                <span>{phishingScore}%</span>
+                <span>{threatScore || 0}%</span>
               </div>
             </>
           )}

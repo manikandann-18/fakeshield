@@ -52,19 +52,26 @@ def train_model():
     
     # 1. Safe URLs (0)
     for domain in safe_domains:
-        for _ in range(50):
-            # Normal URL
+        for _ in range(30):
+            # Short safe URL
             path = np.random.choice(["", "/index.html", "/help", "/about", "/contact", "/terms"])
             url = f"https://{domain}{path}"
             data.append(extract_features(url) + [0])
             
-            # Safe URL with parameters (no phishing keywords)
+            # Safe URL with parameters
             param = np.random.choice(["?q=search", "?category=books", "?ref=nav", "?lang=en"])
             url = f"https://{domain}/{param}"
             data.append(extract_features(url) + [0])
 
+        # Long Safe URLs (to avoid overfitting on length!)
+        for _ in range(40):
+            long_path = "/" + "/".join(np.random.choice(["article", "details", "news", "2026", "june", "report", "document", "public", "index"], np.random.randint(3, 7)))
+            param = "?session=" + "".join(np.random.choice(list("abcdefghijklmnopqrstuvwxyz0123456789"), np.random.randint(10, 25)))
+            url = f"https://{domain}{long_path}{param}"
+            data.append(extract_features(url) + [0])
+
     # 2. Malicious/Phishing URLs (1)
-    # IP-based malicious URLs (with and without paths/hyphens)
+    # Short and long IP-based malicious URLs
     for _ in range(300):
         ip = f"{np.random.randint(1, 255)}.{np.random.randint(1, 255)}.{np.random.randint(1, 255)}.{np.random.randint(1, 255)}"
         path = np.random.choice(["", "/login", "/verify", "/update-details", "/bank-access"])
@@ -72,10 +79,9 @@ def train_model():
         url = f"{proto}{ip}{path}"
         data.append(extract_features(url) + [1])
         
-    # Domain-based phishing (e.g., impersonation, subdomain spamming)
-    for _ in range(700):
+    # Domain-based phishing
+    for _ in range(800):
         proto = np.random.choice(["http://", "https://"], p=[0.7, 0.3])
-        # Brand name + phishing keywords
         brand = np.random.choice(["paypal", "netflix", "amazon", "google", "rbi", "bankofamerica", "apple"])
         keyword = np.random.choice(PHISHING_KEYWORDS)
         tld = np.random.choice([".info", ".xyz", ".top", ".ru", ".cc", ".click", ".buzz"])
@@ -86,7 +92,9 @@ def train_model():
             f"verification-{brand}-details{tld}"
         ])
         
-        url = f"{proto}{pattern}/login"
+        # Sometime make it short, sometimes long
+        path = np.random.choice(["/login", "/verify-account", "/secure-portal/signin", "/update-profile-details-now"])
+        url = f"{proto}{pattern}{path}"
         data.append(extract_features(url) + [1])
 
     # Custom ports on suspicious IPs/domains
