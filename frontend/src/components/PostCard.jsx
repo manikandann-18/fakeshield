@@ -81,14 +81,14 @@ export default function PostCard({ post, onUpdate, onDelete }) {
               </div>
             </>
           )}
-          <p className="mt-2 text-xs opacity-80 font-bold">{details}</p>
+          <p className="mt-2 text-xs opacity-80 font-bold break-words">{details}</p>
         </div>
       </div>
     );
   };
 
   return (
-    <article className="p-4 border-b border-slate-100 hover:bg-slate-50/50 transition-colors relative group">
+    <article className="p-4 border-b border-slate-100 hover:bg-slate-50/50 transition-colors relative group w-full max-w-full overflow-hidden">
       <div className="flex space-x-3">
         <img onClick={() => navigate(`/user/${username}`)} src={avatar} className="w-12 h-12 rounded-full bg-slate-100 cursor-pointer shadow-sm border border-slate-200" alt="avatar"/>
         
@@ -103,7 +103,7 @@ export default function PostCard({ post, onUpdate, onDelete }) {
             </div>
           </div>
           
-          <p className="mt-1 text-[15px] leading-relaxed text-slate-800 whitespace-pre-wrap">{post.content}</p>
+          <p className="mt-1 text-[15px] leading-relaxed text-slate-800 whitespace-pre-wrap break-words">{post.content}</p>
 
           {renderVerificationBadge()}
 
