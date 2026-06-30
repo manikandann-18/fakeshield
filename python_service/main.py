@@ -39,14 +39,22 @@ def load_model():
     else:
         print("Warning: Phishing model file not found.")
 
+PHISHING_KEYWORDS = [
+    "login", "verify", "update", "secure", "bank", "free", "gift", "prize", 
+    "account", "claim", "signin", "support", "billing", "recovery", "webscr"
+]
+
 def extract_url_features(url: str):
+    url_lower = url.lower()
     length = len(url)
     dots = url.count('.')
     hyphens = url.count('-')
     ip_pattern = re.compile(r'(?:http[s]?://)?(?:\d{1,3}\.){3}\d{1,3}')
     is_ip = 1 if ip_pattern.match(url) else 0
-    is_https = 1 if url.lower().startswith('https') else 0
-    return [length, dots, hyphens, is_ip, is_https]
+    is_https = 1 if url_lower.startswith('https') else 0
+    num_keywords = sum(1 for kw in PHISHING_KEYWORDS if kw in url_lower)
+    has_port = 1 if re.search(r':[0-9]+', url.replace('https://', '').replace('http://', '')) else 0
+    return [length, dots, hyphens, is_ip, is_https, num_keywords, has_port]
 
 @app.post("/predict")
 def predict_fake_news(post: PostInput):
