@@ -76,18 +76,56 @@ export const verifyPostContent = async (req, res) => {
     const content = originalPost.content;
     
     // 2. Send post content to Python fake news service
-    const pythonApiUrl = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000/predict';
+    const pythonPredictUrl = process.env.PYTHON_SERVICE_URL || 'http://localhost:8000/predict';
+    const pythonScanUrl = pythonPredictUrl.replace('/predict', '/scan-url');
     
     const axios = (await import('axios')).default;
     let pythonResponse;
     try {
-      pythonResponse = await axios.post(pythonApiUrl, { text: content });
+      pythonResponse = await axios.post(pythonPredictUrl, { text: content });
     } catch (apiError) {
       return res.status(503).json({ message: 'Fake news detection service is unavailable.' });
     }
 
     // 3. Receive prediction and confidence
     const { confidence, prediction } = pythonResponse.data;
+    
+    // 4. Automatically detect and scan URLs inside the post content
+    const urlRegex = /(https?:\/\/[^\s]+)/g;
+    const urls = content.match(urlRegex) || [];
+    const threatReports = [];
+    
+    let phishingScore = 0;
+    let highestThreatStatus = 'Safe';
+    
+    const ThreatReport = (await import('../models/ThreatReport.js')).default;
+    
+    for (const url of urls) {
+      try {
+        const cleanUrl = url.replace(/[.,;:!?]+$/, ''); // clean trailing punctuation
+        const scanRes = await axios.post(pythonScanUrl, { url: cleanUrl });
+        const { status: threatStatus, confidence: threatConfidence } = scanRes.data;
+        
+        // Save to MongoDB ThreatReport
+        const report = new ThreatReport({
+          post: id,
+          url: cleanUrl,
+          status: threatStatus,
+          confidence: threatConfidence
+        });
+        await report.save();
+        threatReports.push(report);
+        
+        if (threatStatus !== 'Safe') {
+          if (threatConfidence > phishingScore) {
+            phishingScore = threatConfidence;
+            highestThreatStatus = threatStatus;
+          }
+        }
+      } catch (scanError) {
+        console.error(`[URL SCAN ERROR] Failed to scan URL ${url}:`, scanError.message);
+      }
+    }
     
     let fakeScore = 0;
     let riskLevel = 'Low';
@@ -111,14 +149,25 @@ export const verifyPostContent = async (req, res) => {
       riskLevel = 'Low';
       status = 'verified';
     }
+    
+    // If a dangerous URL was found, escalate the risk level
+    if (highestThreatStatus === 'Malicious') {
+      riskLevel = 'High';
+      status = 'flagged';
+    } else if (highestThreatStatus === 'Suspicious' && riskLevel === 'Low') {
+      riskLevel = 'Medium';
+      status = 'pending';
+    }
 
     // Format for frontend
     const verificationReport = {
       status,
-      riskScore: Math.round(fakeScore * 100),
+      riskScore: Math.max(Math.round(fakeScore * 100), Math.round(phishingScore)),
       fakeNewsScore: Math.round(fakeScore * 100),
-      phishingScore: 0,
-      details: `AI Prediction: ${prediction} (${confidence.toFixed(1)}%). Risk Level: ${riskLevel}.`
+      phishingScore: Math.round(phishingScore),
+      threatStatus: highestThreatStatus,
+      urlsScanned: threatReports.map(r => ({ url: r.url, status: r.status, confidence: r.confidence })),
+      details: `AI Prediction: ${prediction} (${confidence.toFixed(1)}%). Phishing check: ${highestThreatStatus}${phishingScore > 0 ? ` (${phishingScore.toFixed(1)}%)` : ''}.`
     };
 
     // 5. Store verification result in MongoDB
